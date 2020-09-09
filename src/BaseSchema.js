@@ -177,26 +177,17 @@ const BaseSchema = (
   },
 
   /**
-   * Required has to be chained to a property:
+   * Optional has to be chained to a property:
    * Examples:
-   * - S.prop('prop').required()
-   * - S.prop('prop', S.number()).required()
-   * - S.required(['foo', 'bar'])
+   * - S.prop('prop').optional()
+   *
+   * If optional is not used then the property will be marked required.
    *
    * {@link https://tools.ietf.org/id/draft-handrews-json-schema-validation-01.html#rfc.section.6.5.3|reference}
    * @returns {FluentSchema}
    */
-  required: props => {
-    const currentProp = last(schema.properties)
-    const required = Array.isArray(props)
-      ? [...schema.required, ...props]
-      : currentProp
-      ? [...schema.required, currentProp.name]
-      : [REQUIRED]
-    return options.factory({
-      schema: { ...schema, required },
-      ...options,
-    })
+  optional: () => {
+    return setAttribute({ schema, ...options }, ['optional', true, 'boolean'])
   },
 
   /**
@@ -402,14 +393,24 @@ const BaseSchema = (
    * @returns {object}
    */
   valueOf: () => {
-    const { properties, definitions, required, $schema, ...rest } = schema
+    let { properties, definitions, required, $schema, ...rest } = schema
+    // an object's properties are required unless explicitly marked as optional
+    if (rest.type === 'object') {
+      required = []
+      for (let i = 0; i < (properties || []).length; i++) {
+        const prop = properties[i]
+        if (prop.optional !== true) {
+          required.push(prop.name)
+        }
+      }
+    }
     return Object.assign(
       $schema ? { $schema } : {},
       Object.keys(definitions || []).length > 0
         ? { definitions: flat(definitions) }
         : undefined,
       { ...omit(rest, ['if', 'then', 'else']) },
-      Object.keys(properties || []).length > 0
+      (properties || []).length > 0
         ? { properties: flat(properties) }
         : undefined,
       required && required.length > 0 ? { required } : undefined,
